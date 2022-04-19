@@ -44,6 +44,7 @@ pub(crate) mod uri {
             null,
             nvme,
             nvmx,
+            ocf,
             uring,
             BdevCreateDestroy,
         },
@@ -67,6 +68,7 @@ pub(crate) mod uri {
             "malloc" => Ok(Box::new(malloc::Malloc::try_from(&url)?)),
             "null" => Ok(Box::new(null::Null::try_from(&url)?)),
             "nvmf" => Ok(Box::new(nvmx::NvmfDeviceTemplate::try_from(&url)?)),
+            "ocf" => Ok(Box::new(ocf::Ocf::try_from(&url)?)),
             "pcie" => Ok(Box::new(nvme::NVMe::try_from(&url)?)),
             "uring" => Ok(Box::new(uring::Uring::try_from(&url)?)),
 

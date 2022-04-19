@@ -210,27 +210,32 @@ impl Lvs {
     }
 
     // checks for the disks length and parses to correct format
-    fn parse_disk(disks: Vec<String>) -> Result<String, Error> {
-        let disk = match disks.first() {
-            Some(disk) if disks.len() == 1 => {
+    fn parse_disks(disks: Vec<String>) -> Result<Vec<String>, Error> {
+        if disks.len() == 0 {
+            return Err(Error::Invalid {
+                source: Errno::EINVAL,
+                msg: format!(
+                    "invalid number {} of devices {:?}",
+                    disks.len(),
+                    disks,
+                ),
+            });
+        }
+
+        let mut formated_disks = Vec::new();
+        
+        for disk in &disks {
+            if disk != disks.last().unwrap() || disks.len() == 1 {
                 if Url::parse(disk).is_err() {
-                    format!("aio://{}", disk)
-                } else {
-                    disk.clone()
+                    formated_disks.push(format!("aio://{}", disk));
+                    continue;
                 }
             }
-            _ => {
-                return Err(Error::Invalid {
-                    source: Errno::EINVAL,
-                    msg: format!(
-                        "invalid number {} of devices {:?}",
-                        disks.len(),
-                        disks,
-                    ),
-                })
-            }
-        };
-        Ok(disk)
+            
+            formated_disks.push(disk.clone());
+        }
+
+        Ok(formated_disks)
     }
 
     /// imports a pool based on its name and base bdev name
@@ -294,17 +299,22 @@ impl Lvs {
     /// imports a pool based on its name, uuid and base bdev name
     #[tracing::instrument(level = "debug", err)]
     pub async fn import_from_args(args: PoolArgs) -> Result<Lvs, Error> {
-        let disk = Self::parse_disk(args.disks.clone())?;
+        let disks = Self::parse_disks(args.disks.clone())?;
 
-        let parsed = uri::parse(&disk).map_err(|e| Error::InvalidBdev {
-            source: e,
-            name: args.name.clone(),
-        })?;
+        let mut parses = vec![];
+        for disk in &disks {
+            let parsed = uri::parse(&disk).map_err(|e| Error::InvalidBdev {
+                source: e,
+                name: args.name.clone(),
+            })?;
+
+            parses.push(parsed);
+        }
 
         // At any point two pools with the same name should
         // not exists so returning error
         if let Some(pool) = Self::lookup(&args.name) {
-            return if pool.base_bdev().name() == parsed.get_name() {
+            return if pool.base_bdev().name() == parses.last().unwrap().get_name() {
                 Err(Error::Import {
                     source: Errno::EEXIST,
                     name: args.name.clone(),
@@ -317,20 +327,26 @@ impl Lvs {
             };
         }
 
-        let bdev = match parsed.create().await {
-            Err(e) => match e {
-                NexusBdevError::BdevExists {
-                    ..
-                } => Ok(parsed.get_name()),
-                _ => Err(Error::InvalidBdev {
-                    source: e,
-                    name: args.disks[0].clone(),
-                }),
-            },
-            Ok(name) => Ok(name),
-        }?;
+        // Create each bdev include the last one
+        let mut bdevs = vec![];
+        for (i, parsed) in parses.iter().enumerate() {
+            let bdev = match parsed.create().await {
+                Err(e) => match e {
+                    NexusBdevError::BdevExists {
+                        ..
+                    } => Ok(parsed.get_name()),
+                    _ => Err(Error::InvalidBdev {
+                        source: e,
+                        name: args.disks[i].clone(),
+                    }),
+                },
+                Ok(name) => Ok(name),
+            }?;
 
-        let pool = Self::import(&args.name, &bdev).await?;
+            bdevs.push(bdev);
+        }
+
+        let pool = Self::import(&args.name, &bdevs.last().unwrap()).await?;
 
         // if the uuid is provided for the import request check
         // for the pool uuid to make sure it is the correct one
@@ -422,15 +438,20 @@ impl Lvs {
     /// imports the pool if it exists, otherwise try to create it
     #[tracing::instrument(level = "debug", err)]
     pub async fn create_or_import(args: PoolArgs) -> Result<Lvs, Error> {
-        let disk = Self::parse_disk(args.disks.clone())?;
+        let disks = Self::parse_disks(args.disks.clone())?;
 
-        let parsed = uri::parse(&disk).map_err(|e| Error::InvalidBdev {
-            source: e,
-            name: args.name.clone(),
-        })?;
+        let mut parses = vec![];
+        for disk in &disks {
+            let parsed = uri::parse(&disk).map_err(|e| Error::InvalidBdev {
+                source: e,
+                name: args.name.clone(),
+            })?;
+
+            parses.push(parsed);
+        }
 
         if let Some(pool) = Self::lookup(&args.name) {
-            return if pool.base_bdev().name() == parsed.get_name() {
+            return if pool.base_bdev().name() == parses.last().unwrap().get_name() {
                 Err(Error::PoolCreate {
                     source: Errno::EEXIST,
                     name: args.name.clone(),
@@ -443,18 +464,27 @@ impl Lvs {
             };
         }
 
-        let bdev = match parsed.create().await {
-            Err(e) => match e {
-                NexusBdevError::BdevExists {
-                    ..
-                } => Ok(parsed.get_name()),
-                _ => Err(Error::InvalidBdev {
-                    source: e,
-                    name: args.disks[0].clone(),
-                }),
-            },
-            Ok(name) => Ok(name),
-        }?;
+        // Create each bdev include the last one
+        let mut bdevs = vec![];
+        for (i, parsed) in parses.iter().enumerate() {     
+            let bdev = match parsed.create().await {
+                Err(e) => match e {
+                    NexusBdevError::BdevExists {
+                        ..
+                    } => Ok(parsed.get_name()),
+                    _ => Err(Error::InvalidBdev {
+                        source: e,
+                        name: args.disks[i].clone(),
+                    }),
+                },
+                Ok(name) => Ok(name),
+            }?;
+
+            bdevs.push(bdev);
+        }
+
+        // try to create the pool
+        let last_bdev = bdevs.last().unwrap();
 
         match Self::import_from_args(args.clone()).await {
             Ok(pool) => Ok(pool),
@@ -472,17 +502,17 @@ impl Lvs {
                     ),
                 })
             }
-            // try to create the pool
+
             Err(Error::Import {
                 source, ..
             }) if source == Errno::EILSEQ => {
-                match Self::create(&args.name, &bdev, args.uuid).await {
+                match Self::create(&args.name, &last_bdev, args.uuid).await {
                     Err(create) => {
-                        let _ = parsed.destroy().await.map_err(|_e| {
+                        let _ = parses.pop().unwrap().destroy().await.map_err(|_e| {
                             // we failed to delete the base_bdev be loud about it
                             // there is not much we can do about it here, likely
                             // some desc is still holding on to it or something.
-                            error!("failed to delete base_bdev {} after failed pool creation", bdev);
+                            error!("failed to delete base_bdev {} after failed pool creation", last_bdev);
                         });
                         Err(create)
                     }
