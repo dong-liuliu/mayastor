@@ -31,6 +31,7 @@ pub(super) struct Ocf {
     cache_line_size: u64,
     cache_bdev_name: String,
     core_bdev_name: String,
+    alias: String,
     uuid: Option<uuid::Uuid>,
 }
 
@@ -106,6 +107,7 @@ impl TryFrom<&Url> for Ocf {
             cache_line_size,
             cache_bdev_name: cache_bdev,
             core_bdev_name: core_bdev,
+            alias: url.to_string(),
             uuid,
         })
     }
@@ -172,12 +174,18 @@ impl CreateDestroy for Ocf {
             name: self.name.clone(),
         })?;
         
-        if let Some(bdev) = UntypedBdev::lookup_by_name(&self.get_name()) {
-            if let Some(u) = self.uuid {
-                if bdev.uuid_as_string() != u.to_hyphenated().to_string() {
-                    error!("Connected to device {} but expect to connect to {} instead", bdev.uuid_as_string(), u.to_hyphenated().to_string());
-                }
-            };
+        if let Some(mut bdev) = UntypedBdev::lookup_by_name(&self.get_name()) {
+            if let Some(uuid) = self.uuid {
+                unsafe { bdev.set_raw_uuid(uuid.into()) };
+            }
+
+            if !bdev.add_alias(&self.alias) {
+                error!(
+                    "failed to add alias {} to device {}",
+                    self.alias,
+                    self.get_name()
+                );
+            }
 
             return Ok(self.get_name());
         };
@@ -189,37 +197,46 @@ impl CreateDestroy for Ocf {
 
     /// Destroy the given ocf bdev
     async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
-        let name = String::from(&self.name).into_cstring();
-        let ocf_vbdev = unsafe { vbdev_ocf_get_by_name(name.as_ptr()) };
+        match UntypedBdev::lookup_by_name(&self.name) {
+            Some(mut bdev) => {
+                bdev.remove_alias(&self.alias);
+ 
+                let name = String::from(&self.name).into_cstring();
+                let ocf_vbdev = unsafe { vbdev_ocf_get_by_name(name.as_ptr()) };
+                
+                if ocf_vbdev.is_null() {
+                    return Err(NexusBdevError::BdevNotFound {
+                        name: self.get_name(),
+                    });
+                }
         
-        if ocf_vbdev.is_null() {
-            return Err(NexusBdevError::BdevNotFound {
+                let (sender, receiver) = oneshot::channel::<ErrnoResult<()>>();
+                let errno = unsafe {
+                    vbdev_ocf_delete_clean(
+                        ocf_vbdev,
+                        Some(done_errno_cb),
+                        cb_arg(sender),
+                    )
+                };
+                
+                errno_result_from_i32((), errno).context(
+                    nexus_uri::DestroyBdev {
+                        name: self.name.clone(),
+                    },
+                )?;
+        
+                receiver
+                    .await
+                    .context(nexus_uri::CancelBdev {
+                        name: self.get_name(),
+                    })?
+                    .context(nexus_uri::DestroyBdev {
+                        name: self.get_name(),
+                    })
+            }
+            None => Err(NexusBdevError::BdevNotFound {
                 name: self.get_name(),
-            });
+            }),
         }
-
-        let (sender, receiver) = oneshot::channel::<ErrnoResult<()>>();
-        let errno = unsafe {
-            vbdev_ocf_delete_clean(
-                ocf_vbdev,
-                Some(done_errno_cb),
-                cb_arg(sender),
-            )
-        };
-        
-        errno_result_from_i32((), errno).context(
-            nexus_uri::DestroyBdev {
-                name: self.name.clone(),
-            },
-        )?;
-
-        receiver
-            .await
-            .context(nexus_uri::CancelBdev {
-                name: self.get_name(),
-            })?
-            .context(nexus_uri::DestroyBdev {
-                name: self.get_name(),
-            })
     }
 }
