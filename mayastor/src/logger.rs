@@ -51,6 +51,10 @@ pub extern "C" fn log_impl(
         return;
     }
 
+    if file.is_null() {
+        return;
+    }
+
     let arg =
         unsafe { CStr::from_ptr(buf).to_string_lossy().trim_end().to_string() };
     let filename = unsafe { CStr::from_ptr(file).to_str().unwrap() };
