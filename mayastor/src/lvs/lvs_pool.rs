@@ -39,7 +39,7 @@ use crate::{
     core::{Bdev, IoType, Share, UntypedBdev},
     ffihelper::{cb_arg, pair, AsStr, ErrnoResult, FfiResult, IntoCString},
     lvs::{Error, Lvol, PropName, PropValue},
-    nexus_uri::{bdev_destroy, NexusBdevError},
+    nexus_uri::{bdev_serial_destroy, NexusBdevError},
     pool::PoolArgs,
 };
 
@@ -545,7 +545,7 @@ impl Lvs {
             })?;
 
         info!("pool {} exported successfully", pool);
-        bdev_destroy(&base_bdev.bdev_uri_original().unwrap())
+        bdev_serial_destroy(&base_bdev.bdev_uri_original().unwrap())
             .await
             .map_err(|e| Error::Destroy {
                 source: e,
@@ -623,7 +623,7 @@ impl Lvs {
 
         info!("pool {} destroyed successfully", pool);
 
-        bdev_destroy(&base_bdev.bdev_uri_original().unwrap())
+        bdev_serial_destroy(&base_bdev.bdev_uri_original().unwrap())
             .await
             .map_err(|e| Error::Destroy {
                 source: e,

@@ -36,7 +36,8 @@ impl<T: CreateDestroy + GetName + std::fmt::Debug> BdevCreateDestroy for T {}
 pub trait CreateDestroy {
     type Error;
     async fn create(&self) -> Result<String, Self::Error>;
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error>;
+    // Return names of its sub bdevs if this bdev is a vbdev
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error>;
 }
 
 /// The following trait must also be implemented for every supported

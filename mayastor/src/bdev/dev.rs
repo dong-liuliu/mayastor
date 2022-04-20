@@ -113,7 +113,8 @@ pub async fn device_create(uri: &str) -> Result<String, NexusBdevError> {
 }
 
 pub async fn device_destroy(uri: &str) -> Result<(), NexusBdevError> {
-    uri::parse(uri)?.destroy().await
+    uri::parse(uri)?.destroy().await?;
+    Ok(())
 }
 
 pub fn device_open(

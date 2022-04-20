@@ -391,7 +391,8 @@ impl CreateDestroy for NvmfDeviceTemplate {
         }
     }
 
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
-        controller::destroy_device(self.get_name()).await
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
+        controller::destroy_device(self.get_name()).await?;
+        Ok(Vec::new())
     }
 }

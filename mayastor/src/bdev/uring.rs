@@ -115,7 +115,7 @@ impl CreateDestroy for Uring {
     }
 
     /// Destroy the given uring bdev
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         match UntypedBdev::lookup_by_name(&self.name) {
             Some(mut bdev) => {
                 bdev.remove_alias(&self.alias);
@@ -134,7 +134,8 @@ impl CreateDestroy for Uring {
                     })?
                     .context(nexus_uri::DestroyBdev {
                         name: self.get_name(),
-                    })
+                    })?;
+                Ok(Vec::new())
             }
             None => Err(NexusBdevError::BdevNotFound {
                 name: self.get_name(),

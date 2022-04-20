@@ -121,7 +121,7 @@ impl CreateDestroy for Aio {
     }
 
     /// Destroy the given AIO bdev
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         match UntypedBdev::lookup_by_name(&self.name) {
             Some(mut bdev) => {
                 bdev.remove_alias(&self.alias);
@@ -133,6 +133,7 @@ impl CreateDestroy for Aio {
                         cb_arg(sender),
                     );
                 }
+
                 receiver
                     .await
                     .context(nexus_uri::CancelBdev {
@@ -140,7 +141,10 @@ impl CreateDestroy for Aio {
                     })?
                     .context(nexus_uri::DestroyBdev {
                         name: self.get_name(),
-                    })
+                    })?;
+
+                    return Ok(Vec::new());
+                
             }
             None => Err(NexusBdevError::BdevNotFound {
                 name: self.get_name(),

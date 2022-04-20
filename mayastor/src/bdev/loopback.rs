@@ -90,13 +90,13 @@ impl CreateDestroy for Loopback {
         })
     }
 
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         if let Some(child) = lookup_nexus_child(&self.name) {
             child.remove();
         }
         if let Some(mut bdev) = UntypedBdev::lookup_by_name(&self.name) {
             bdev.remove_alias(&self.alias);
         }
-        Ok(())
+        Ok(Vec::new())
     }
 }

@@ -125,7 +125,7 @@ impl CreateDestroy for NVMe {
             .to_string())
     }
 
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         if let Some(mut bdev) = UntypedBdev::lookup_by_name(&self.get_name()) {
             bdev.remove_alias(&self.url.to_string());
             let errno = unsafe {
@@ -136,7 +136,9 @@ impl CreateDestroy for NVMe {
             };
             errno_result_from_i32((), errno).context(nexus_uri::DestroyBdev {
                 name: self.name.clone(),
-            })
+            })?;
+
+            Ok(Vec::new())
         } else {
             Err(NexusBdevError::BdevNotFound {
                 name: self.get_name(),

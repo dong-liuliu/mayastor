@@ -1,6 +1,6 @@
 use std::{convert::TryFrom, num::ParseIntError, str::ParseBoolError};
 
-use crate::{bdev::uri, core::Bdev};
+use crate::{bdev::uri, core::Bdev, core::Share, core::UntypedBdev};
 use futures::channel::oneshot::Canceled;
 use nix::errno::Errno;
 use snafu::Snafu;
@@ -115,9 +115,26 @@ pub async fn bdev_create(uri: &str) -> Result<String, NexusBdevError> {
 }
 
 /// Parse URI and destroy bdev described in the URI.
-pub async fn bdev_destroy(uri: &str) -> Result<(), NexusBdevError> {
+pub async fn bdev_destroy(uri: &str) -> Result<Vec<String>, NexusBdevError> {
     info!(?uri, "destroy");
     uri::parse(uri)?.destroy().await
+}
+
+/// Parse URI and destroy bdev described in the URI and its serial sub bdevs.
+pub async fn bdev_serial_destroy(uri: &str) -> Result<(), NexusBdevError> {
+    info!(?uri, "serial destroy");
+    let sub_names = uri::parse(uri)?.destroy().await?;
+
+    for bdev_name in sub_names {
+        let bdev = UntypedBdev::lookup_by_name(&bdev_name).ok_or(
+            NexusBdevError::BdevNotFound {
+                    name: bdev_name,
+                })?;
+
+        bdev_destroy(&bdev.bdev_uri_original().unwrap()).await?;
+    }
+
+    Ok(())
 }
 
 /// TODO

@@ -184,7 +184,7 @@ impl CreateDestroy for Null {
         })
     }
 
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         if let Some(mut bdev) = UntypedBdev::lookup_by_name(&self.name) {
             bdev.remove_alias(&self.alias);
             let (s, r) = oneshot::channel::<ErrnoResult<()>>();
@@ -202,7 +202,8 @@ impl CreateDestroy for Null {
                 })?
                 .context(nexus_uri::DestroyBdev {
                     name: self.name,
-                })
+                })?;
+                Ok(Vec::new())
         } else {
             Err(NexusBdevError::BdevNotFound {
                 name: self.name,

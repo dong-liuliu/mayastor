@@ -233,7 +233,7 @@ impl CreateDestroy for Nvmf {
     }
 
     /// Destroy the given NVMF bdev
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         match UntypedBdev::lookup_by_name(&self.get_name()) {
             Some(mut bdev) => {
                 bdev.remove_alias(&self.alias);
@@ -250,7 +250,8 @@ impl CreateDestroy for Nvmf {
                         },
                     )
                 }
-                .await
+                .await?;
+                Ok(Vec::new())
             }
             None => Err(NexusBdevError::BdevNotFound {
                 name: self.get_name(),
