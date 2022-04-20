@@ -196,7 +196,7 @@ impl CreateDestroy for Ocf {
     }
 
     /// Destroy the given ocf bdev
-    async fn destroy(self: Box<Self>) -> Result<(), Self::Error> {
+    async fn destroy(self: Box<Self>) -> Result<Vec<String>, Self::Error> {
         match UntypedBdev::lookup_by_name(&self.name) {
             Some(mut bdev) => {
                 bdev.remove_alias(&self.alias);
@@ -209,7 +209,7 @@ impl CreateDestroy for Ocf {
                         name: self.get_name(),
                     });
                 }
-        
+
                 let (sender, receiver) = oneshot::channel::<ErrnoResult<()>>();
                 let errno = unsafe {
                     vbdev_ocf_delete_clean(
@@ -232,7 +232,13 @@ impl CreateDestroy for Ocf {
                     })?
                     .context(nexus_uri::DestroyBdev {
                         name: self.get_name(),
-                    })
+                    })?;
+                
+                let mut sub_bdevs = Vec::new();
+
+                sub_bdevs.push(self.cache_bdev_name);
+                sub_bdevs.push(self.core_bdev_name);
+                Ok(sub_bdevs)
             }
             None => Err(NexusBdevError::BdevNotFound {
                 name: self.get_name(),

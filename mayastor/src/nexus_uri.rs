@@ -131,6 +131,7 @@ pub async fn bdev_serial_destroy(uri: &str) -> Result<(), NexusBdevError> {
                     name: bdev_name,
                 })?;
 
+        //TODO: recursive bdev_serial_destroy
         bdev_destroy(&bdev.bdev_uri_original().unwrap()).await?;
     }
 
