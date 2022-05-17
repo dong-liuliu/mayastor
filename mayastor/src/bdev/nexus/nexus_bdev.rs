@@ -28,6 +28,8 @@ use super::{
     DrEvent,
     NbdDisk,
     NbdError,
+    VhostblkCtrlr,
+    VhostblkError,
     NexusChannel,
     NexusChild,
     NexusModule,
@@ -127,6 +129,8 @@ pub enum Error {
     ShareNbdNexus { source: NbdError, name: String },
     #[snafu(display("Failed to share nvmf nexus {}", name))]
     ShareNvmfNexus { source: CoreError, name: String },
+    #[snafu(display("Failed to share nexus over vhostblk {}", name))]
+    ShareVhostblkNexus { source: VhostblkError, name: String },
     #[snafu(display("Failed to unshare nexus {}", name))]
     UnshareNexus { source: CoreError, name: String },
     #[snafu(display(
@@ -359,6 +363,7 @@ pub(crate) static NEXUS_PRODUCT_ID: &str = "Nexus CAS Driver v0.0.1";
 pub enum NexusTarget {
     NbdDisk(NbdDisk),
     NexusNvmfTarget,
+    NexusVhostTarget(VhostblkCtrlr),
 }
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum NexusPauseState {

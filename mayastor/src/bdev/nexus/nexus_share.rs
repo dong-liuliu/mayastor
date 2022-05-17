@@ -5,9 +5,11 @@ use std::pin::Pin;
 use super::{
     Error,
     NbdDisk,
+    VhostblkCtrlr,
     Nexus,
     NexusTarget,
     ShareNbdNexus,
+    ShareVhostblkNexus,
     ShareNvmfNexus,
     UnshareNexus,
 };
@@ -32,7 +34,7 @@ impl<'n> Share for Nexus<'n> {
         cntlid_range: Option<(u16, u16)>,
     ) -> Result<Self::Output, Self::Error> {
         match self.shared() {
-            Some(Protocol::Off) | None => {
+            Some(Protocol::Off) | Some(Protocol::Vhostblk) |None => {
                 let name = self.name.clone();
                 self.as_mut()
                     .pinned_bdev_mut()
@@ -134,6 +136,20 @@ impl<'n> Nexus<'n> {
                 }
                 Ok(uri)
             }
+            Protocol::Vhostblk => {
+                let vblk = VhostblkCtrlr::create(&self.name).context(
+                    ShareVhostblkNexus {
+                        name: self.name.clone(),
+                    },
+                )?;
+
+                let uri = vblk.as_uri();
+                unsafe {
+                    self.as_mut().get_unchecked_mut().nexus_target =
+                        Some(NexusTarget::NexusVhostTarget(vblk));
+                }
+                Ok(uri)
+            }
             Protocol::Nvmf => {
                 let args = Some((
                     self.nvme_params.min_cntlid,
@@ -156,6 +172,9 @@ impl<'n> Nexus<'n> {
             match self.as_mut().get_unchecked_mut().nexus_target.take() {
                 Some(NexusTarget::NbdDisk(disk)) => {
                     disk.destroy();
+                }
+                Some(NexusTarget::NexusVhostTarget(vblk)) => {
+                    vblk.destroy();
                 }
                 Some(NexusTarget::NexusNvmfTarget) => {
                     self.as_mut().unshare().await?;
@@ -184,6 +203,7 @@ impl<'n> Nexus<'n> {
         match self.nexus_target {
             Some(NexusTarget::NbdDisk(ref disk)) => Some(disk.as_uri()),
             Some(NexusTarget::NexusNvmfTarget) => self.share_uri(),
+            Some(NexusTarget::NexusVhostTarget(ref vblk)) => Some(vblk.as_uri()),
             None => None,
         }
     }

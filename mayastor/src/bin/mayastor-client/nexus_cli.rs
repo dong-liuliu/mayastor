@@ -97,7 +97,7 @@ pub fn subcommands<'a, 'b>() -> App<'a, 'b> {
     let publish = SubCommand::with_name("publish")
         .about("publish the nexus")
         .arg(Arg::with_name("protocol").short("p").long("protocol").value_name("PROTOCOL")
-            .help("Name of a protocol (nvmf) used for publishing the nexus remotely"))
+            .help("Name of a protocol (nvmf, vhostblk) used for publishing the nexus remotely"))
         .arg(Arg::with_name("uuid").required(true).index(1)
             .help("uuid for the nexus"))
         .arg(Arg::with_name("key").required(false).index(2)
@@ -587,6 +587,7 @@ async fn nexus_publish(
     let protocol = match matches.value_of("protocol") {
         None => rpc::ShareProtocolNexus::NexusNbd,
         Some("nvmf") => rpc::ShareProtocolNexus::NexusNvmf,
+        Some("vhostblk") => rpc::ShareProtocolNexus::NexusVhostblk,
         Some(_) => {
             return Err(Status::new(
                 Code::Internal,

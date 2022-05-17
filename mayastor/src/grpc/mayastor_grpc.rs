@@ -184,6 +184,7 @@ impl From<Protocol> for i32 {
         match p {
             Protocol::Off => 0,
             Protocol::Nvmf => 1,
+            Protocol::Vhostblk => 3,
         }
     }
 }
@@ -736,7 +737,7 @@ impl mayastor_server::Mayastor for MayastorSvc {
 
                             let mut lvol = Pin::new(&mut lvol);
                             match Protocol::try_from(args.share)? {
-                                Protocol::Off => {
+                                Protocol::Off | Protocol::Vhostblk => {
                                     lvol.as_mut().unshare().await?;
                                 }
                                 Protocol::Nvmf => {

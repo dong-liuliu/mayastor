@@ -13,6 +13,7 @@ mod nexus_io;
 mod nexus_iter;
 mod nexus_module;
 mod nexus_nbd;
+mod nexus_vhostblk;
 mod nexus_persistence;
 mod nexus_share;
 
@@ -36,6 +37,7 @@ pub(crate) use nexus_bdev::{
     RebuildOperation,
     RemoveRebuildJob,
     ShareNbdNexus,
+    ShareVhostblkNexus,
     ShareNvmfNexus,
     UnshareNexus,
     NEXUS_PRODUCT_ID,
@@ -64,6 +66,7 @@ pub use nexus_iter::{
 };
 pub(crate) use nexus_module::{NexusModule, NEXUS_MODULE_NAME};
 pub(crate) use nexus_nbd::{NbdDisk, NbdError};
+pub(crate) use nexus_vhostblk::{VhostblkCtrlr, VhostblkError};
 pub(crate) use nexus_persistence::PersistOp;
 pub use nexus_persistence::{ChildInfo, NexusInfo};
 

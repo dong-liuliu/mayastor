@@ -207,7 +207,7 @@ where
                     subsystem.destroy();
                 }
             }
-            Some(Protocol::Off) | None => {}
+            Some(Protocol::Vhostblk) | Some(Protocol::Off) | None => {}
         }
 
         Ok(self.name().to_string())

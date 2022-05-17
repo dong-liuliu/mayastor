@@ -263,7 +263,7 @@ impl ReplicaRpc for ReplicaService {
                             }
 
                             match Protocol::try_from(args.share)? {
-                                Protocol::Off => {
+                                Protocol::Off | Protocol::Vhostblk => {
                                     return Err(LvsError::Invalid {
                                         source: Errno::EINVAL,
                                         msg: "invalid share protocol NONE"

@@ -10,6 +10,8 @@ pub enum Protocol {
     Off,
     /// shared as NVMe-oF TCP
     Nvmf,
+    /// shared as Vhost blk to serve virtulized instance
+    Vhostblk,
 }
 
 impl TryFrom<i32> for Protocol {
@@ -20,6 +22,7 @@ impl TryFrom<i32> for Protocol {
             0 => Ok(Self::Off),
             1 => Ok(Self::Nvmf),
             // 2 was for iSCSI
+            3 => Ok(Self::Vhostblk),
             // the gRPC code does not validate enums so we have
             // to do it here
             _ => Err(Error::ReplicaShareProtocol {
@@ -34,6 +37,7 @@ impl Display for Protocol {
         let p = match self {
             Self::Off => "Not shared",
             Self::Nvmf => "NVMe-oF TCP",
+            Self::Vhostblk => "vhost blk",
         };
         write!(f, "{}", p)
     }
