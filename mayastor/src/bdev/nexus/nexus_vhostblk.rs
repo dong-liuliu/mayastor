@@ -97,7 +97,7 @@ impl VhostblkCtrlr {
     pub fn create(bdev_name: &str) -> Result<Self, VhostblkError> {
         let vblk_name = format!("{}_vhostblk", bdev_name);
 
-        let vblk_ptr = start(bdev_name, &vblk_name)?;
+        let vblk_ptr = start(&vblk_name, bdev_name)?;
         info!("Construct vhostblk disk {} for {}", vblk_name, bdev_name);
 
         Ok(Self {

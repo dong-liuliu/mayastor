@@ -27,6 +27,7 @@ use spdk_rs::{
         spdk_rpc_set_state,
         spdk_thread_lib_fini,
         spdk_thread_send_critical_msg,
+        spdk_vhost_set_socket_path,
         SPDK_LOG_DEBUG,
         SPDK_LOG_INFO,
         SPDK_RPC_RUNTIME,
@@ -48,6 +49,7 @@ use crate::{
     logger,
     persistent_store::PersistentStore,
     subsys::{self, Config, PoolConfig},
+    ffihelper::{errno_result_from_i32},
 };
 
 fn parse_mb(src: &str) -> Result<i32, String> {
@@ -107,6 +109,9 @@ pub struct MayastorCliArgs {
     #[structopt(short = "r", default_value = "/var/tmp/mayastor.sock")]
     /// Path to create the rpc socket.
     pub rpc_address: String,
+    #[structopt(short = "D")]
+    /// Directory path to create the vhost socket.
+    pub vhost_sock_dir: Option<String>,
     #[structopt(short = "y")]
     /// Path to mayastor config YAML file.
     pub mayastor_config: Option<String>,
@@ -163,6 +168,7 @@ impl Default for MayastorCliArgs {
             reactor_mask: "0x1".into(),
             mem_size: 0,
             rpc_address: "/var/tmp/mayastor.sock".to_string(),
+            vhost_sock_dir: None,
             no_pci: true,
             log_components: vec![],
             mayastor_config: None,
@@ -246,6 +252,7 @@ pub struct MayastorEnvironment {
     debug_level: spdk_log_level,
     reactor_mask: String,
     pub rpc_addr: String,
+    pub vhost_sock_dir: Option<String>,
     shm_id: i32,
     shutdown_cb: spdk_app_shutdown_cb,
     tpoint_group_mask: String,
@@ -284,6 +291,7 @@ impl Default for MayastorEnvironment {
             debug_level: SPDK_LOG_INFO,
             reactor_mask: "0x1".into(),
             rpc_addr: "/var/tmp/mayastor.sock".into(),
+            vhost_sock_dir: None,
             shm_id: -1,
             shutdown_cb: None,
             tpoint_group_mask: String::new(),
@@ -381,6 +389,7 @@ impl MayastorEnvironment {
             no_pci: args.no_pci,
             reactor_mask: args.reactor_mask,
             rpc_addr: args.rpc_address,
+            vhost_sock_dir: args.vhost_sock_dir,
             hugedir: args.hugedir,
             env_context: args.env_context,
             core_list: args.core_list,
@@ -664,6 +673,20 @@ impl MayastorEnvironment {
             .for_each(|c| Reactors::launch_remote(c).unwrap());
 
         let rpc = CString::new(self.rpc_addr.as_str()).unwrap();
+
+        if let Some(vhost_sock_dir) = &self.vhost_sock_dir {
+            let dir_path = CString::new(vhost_sock_dir.as_str()).unwrap();
+            let success = unsafe {
+                spdk_vhost_set_socket_path(dir_path.as_ptr())
+            };
+            match errno_result_from_i32(success, success) {
+                Err(errno) => {
+                    warn!("failed to set vhost socket dir {}: {}",
+                        vhost_sock_dir.as_str(), errno);
+                }
+                Ok(_) =>{}
+            }
+        }
 
         // wait for all cores to be online, not sure if this is the right way
         // but when using more then 16 cores, I saw some "weirdness"
