@@ -4,6 +4,7 @@ use snafu::{Snafu,};
 use std::{
     ffi::{CStr, CString},
     fmt,
+    os::raw::c_char,
 };
 
 // int spdk_vhost_blk_construct(const char *name, const char *cpumask,
@@ -40,10 +41,15 @@ use spdk_rs::libspdk::{
     spdk_vhost_unlock,
     spdk_vhost_dev_get_name,
     spdk_vhost_get_socket_path,
+    spdk_cpuset_alloc,
+    spdk_cpuset_set_cpu,
+    spdk_cpuset_free,
+    spdk_cpuset_fmt,
 };
 
 use crate::{
     ffihelper::{errno_result_from_i32},
+    core::{Cores, Reactors},
 };
 
 #[derive(Debug, Snafu)]
@@ -52,6 +58,44 @@ pub enum VhostblkError {
     ConstructVhostblk { source: Errno, dev: String },
 }
 
+
+fn roundrobin_cpumask() -> String {
+    static mut LAST_CORE: u32 = 255;
+
+    let last_core = unsafe {LAST_CORE};
+    let last_reactor = Reactors::iter().find(|c| c.core() >= last_core);
+    let next_core = match last_reactor {
+        Some(_r) => {
+            unsafe { LAST_CORE = last_core + 1;}
+            if let Some(_y) = Reactors::iter().find(|c| c.core() >= last_core) {
+                unsafe {LAST_CORE}
+            } else {
+                unsafe {LAST_CORE = Cores::first();}
+                unsafe {LAST_CORE}
+            }
+        }
+        None => {
+            unsafe {LAST_CORE = Cores::first();}
+            unsafe {LAST_CORE}
+        }
+    };
+
+    let str_buf: String;
+    unsafe {
+
+        let cpuset = spdk_cpuset_alloc();
+
+        spdk_cpuset_set_cpu(cpuset, next_core, true);
+        let c_buf: *const c_char = spdk_cpuset_fmt(cpuset);
+        let c_str: &CStr = CStr::from_ptr(c_buf);
+        let str_slice: &str = c_str.to_str().unwrap();
+        str_buf = str_slice.to_owned();
+
+        spdk_cpuset_free(cpuset);
+    }
+    
+    return str_buf;
+}
 
 fn start(
     vhostblk_name: &str,
@@ -62,10 +106,13 @@ fn start(
     let readonly = false;
     let packed_ring = false;
 
+    let cpumask = roundrobin_cpumask();
+    let next_cpumask = CString::new(cpumask.as_str()).unwrap();
+
     let success = unsafe {
         spdk_vhost_blk_construct(
             vhostblk_name.as_ptr(),
-            std::ptr::null(),
+            next_cpumask.as_ptr(),
             c_bdev_name.as_ptr(),
             readonly,
             packed_ring,
